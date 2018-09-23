@@ -602,7 +602,7 @@ class optional {
     else
       throw ...
   }
-}
+};
 ```
 
 
