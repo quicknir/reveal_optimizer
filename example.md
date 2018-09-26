@@ -2,6 +2,14 @@
 
 #### Nir Friedman
 
+Note:
+ - Audience: how many people have ever looked at compiler assembly?
+ - How many felt like they understood it, to some degree?
+ - How many have ever felt like their assembly was crap?
+ - Story time: travelling with my son two weeks ago
+ - ...
+ - Assembly isn't crap, just sub-optimal!
+
 
 
 ### What this talk is
@@ -1046,6 +1054,9 @@ foo(std::variant<int, double>&):
 Note:
  - Plus, dozens of lines of code related to exceptions that
    cannot be thrown
+ - Remember my story from the beginning?
+ - I lied, assembly can be crap
+ - Congrats, now you've all seen crappy assembly
 
 
 ### Can we visit better?
@@ -1089,6 +1100,14 @@ Note:
 - Understand where you can easily add value to the compiler
 - And when you should!
 
+Note:
+- Bring it back to my story at the beginning
+- Moral of the story: he was potty training, the crap was my fault
+- He's 2, you probably assumed he was like 10 from my story (joke)
+- Maybe your bad assembly is your fault too
+- Parting thought: use the compiler, it's an amazing tool, written
+  by brilliant people
+- But take responsibility for your crap
 
 
 ### Appendix
