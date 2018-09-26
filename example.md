@@ -35,6 +35,9 @@ Note:
  - Measurement is hard if you're not the end user of your codebase
  - Can cost many man hours, depending on the scope of the change
 
+Note:
+- Mark Elendt Tuesday plenary talk: "performance is hard to retrofit"
+
 
 ### My job
 
@@ -52,6 +55,11 @@ Note:
  - But: spent many hours writing code, looking at assembly on Godbolt
  - Mental model for when something will be optimized seems
    not-entirely-defective
+
+Note:
+ - I've told you talk isn't exciting, I'm not qualified
+ - Secret to good talk, same as secret to good marriage, as
+   I tell my wife: lower expectations
 
 
 
@@ -124,9 +132,6 @@ std::sort(v.begin(), v.end(), // 2
  - More precise in this case: check assembly; ex machina
 
 ```
-#include <algorithm>
-#include <vector>
-
 bool my_comp(double x, double y) { return x > y; }
 
 void foo(std::vector<double>& x) {
@@ -232,29 +237,6 @@ Note:
 - Second is loop: which kind? for, do while, or while? (while)
 
 
-### Basic blocks Examples (2)
-
-```
-void bar();
-
-void foo(const vector<int>& x, bool b) {
-   for (auto e : x) {
-     // Code region A
-     if (b) bar();
-     // Code region B
-   }
-}
-```
-
-Note:
- - count basic blocks (assume region A, B, bar, are all one)
- - don't worry about exact number (some arbitrary choices)
- - 1 (for loop initialization)
- - 1 (for loop test)
- - for loop body: A (1), if body (1), bar (1)
- - Emphasize the loop blocks, and that if test is part of A block
-
-
 ### Static vs Dynamic information (1)
  - static -> types
  - dynamic -> values
@@ -264,7 +246,7 @@ Note:
 - TODO: nice arrow icon?
 
 
-### Static vs Dynamic information
+### Static vs Dynamic information (2)
 
 ```
 void foo(const std::vector<double>& x);
@@ -450,17 +432,17 @@ Note:
 
 ### Passing by reference
 
-<section><pre><code data-trim data-noescape>
+<pre><code data-trim data-noescape>
 void foo(double x);
 void bar();
 
-void qux(const vector<double>& x, const bool<span class="block">&</span> b) {
+void qux(const vector<double>& x, const bool<span class="fragment highlight-red">&</span> b) {
    for (auto e : x) {
      bar();
      if (b) foo(e);
    }
 }
-</code></pre></section>
+</code></pre>
 
 Note:
 - TODO: highlight & beside bool in weird color
@@ -506,6 +488,8 @@ Note:
 - At O3 this actually prevents pulling the boolean out of the loop!
 - As correctness is a proof, showing an optimization would
   be wrong only takes one counter-example
+- "Don't pass bool by reference": lots of primitives get passed
+  by reference in generic code
 
 
 ### Impact of const (1)
@@ -567,7 +551,11 @@ int foo(optional<int>& x) {
 
 Note:
 - when I first heard about optional, was surprised that *
-  (the "easy" thing to write) does unchecked access
+  (the "easy" thing to write) does unchecked access (UB)
+- At first I was embarassed to say this; get torn apart by
+  pack of boost/committee members. Joke: was drinking a lot
+  then
+- Andrey backed up this up Monday so now I'm good.
 - people said, performance cost, value() introduces another
   branch in idiomatic usage that's unnecessary
 - "two branches"
@@ -689,7 +677,6 @@ void qux(const vector<double>& x) {
     // many lines of code...
   }
 }
-
 void qux(const vector<double>& x, bool b) {
   if (b) qux<true>(x);
   else qux<false>(x);
@@ -736,6 +723,348 @@ Note:
   copies of the function, in each copy, the bool is constant
   and trivial to remove branch
 - Example usage: if buy, sell
+
+
+### Sort saga, concluded (1)
+
+```
+bool my_comp(double x, double y) { return x > y; }
+
+std::sort(v.begin(), v.end(), my_comp);
+```
+
+Note:
+- This doesn't produce as good assembly, consistently?
+- Why not? Comes back to basic blocks that the compiler
+  sees "by default"
+- Recall: we fixed this issue by writing a lambda that
+  calls the function
+- the lambda is a unique type, unique instance of sort
+  template, lambda gets my_comp inlined
+- Can we automate this? Yes, but it only looks nice
+  in 17
+
+
+### Sort saga, concluded (2)
+
+```
+template <auto F> // 17 only syntax
+struct function_object {
+  template <class ... Ts>
+  auto operator()(Ts&& ... ts) {
+    return f(std::forward<Ts>(ts)...);
+  }
+};
+```
+
+
+### Sort saga, concluded (3)
+
+```
+std::sort(v.begin(), v.end(), function_object<my_comp>{});
+```
+
+Note:
+- basis for proposal, monostate_function
+- Monostate function:
+  http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2016/p0477r0.pdf
+- fun exercise: write C++14 version (will require a macro at the very end)
+
+
+
+### A cry for help
+
+Note:
+  - In which I talk about situations where it's hard to help the compiler
+    help you, so it's hard for me to help you help the compiler help you
+  - So, drawing attention to some issues, helping the committee help
+    me help you to help the compiler help you
+  - All very helpful
+
+
+### Reading bytes to structs
+
+```
+void do_stuff_packet(const char * buffer) {
+  auto& h = *reinterpret_cast<HeaderType*>(buffer);
+  int packet_type = h.type;
+  if (int == 0) {
+    auto& o = *reinterpret_cast<FirstType>(buffer + sizeof(HeaderType));
+    // do stuff with o
+  }
+  else if (int == 1) { ... }
+}
+```
+
+Note:
+  - This code is complete standard fare at HFTs, e.g. read market data
+    packets off socket, and many other situations e.g. deserializing
+    binary data
+  - It's also UB
+
+
+### Reading bytes to structs: Kosher!
+
+```
+void do_stuff_packet(const char * buffer) {
+  HeaderType h;
+  std::memcpy(&h, buffer, sizeof(HeaderType));
+  int packet_type = h.type;
+  if (packet_type == 0) {
+    FirstType o;
+    std::memcpy(&o, buffer+sizeof(HeaderType),
+        sizeof(FirstType))
+    // do stuff with o
+  }
+  else if (int == 1) { ... }
+}
+```
+
+Note:
+  - No longer UB
+  - The only sanctioned way to do this (that I'm aware of)
+  - This is ok, because memcpy optimizes, right?
+
+
+### Will it optimize?
+
+```
+void foo(const FirstType&);
+
+void from_buffer(char* buffer) {
+  HeaderType h;
+  std::memcpy(&h, buffer, sizeof(HeaderType));
+  if (h.type == 0) {
+    FirstType o;
+    std::memcpy(&o, buffer+sizeof(HeaderType),
+        sizeof(FirstType));
+    foo(o);
+  }
+}
+```
+
+Note:
+ - poll audience (remember, there are two memcopies)
+
+
+### Yes and No
+
+```
+from_buffer(char*):t sa
+        mov     eax, DWORD PTR [rdi]
+        test    eax, eax
+        je      .L8
+        ret
+.L8:
+        sub     rsp, 24
+        movdqu  xmm0, XMMWORD PTR [rdi+4]
+        mov     rdi, rsp
+        movaps  XMMWORD PTR [rsp], xmm0
+        call    foo(FirstType&)
+        add     rsp, 24
+        ret
+```
+
+Note:
+ - Once address "escapes", hard for compiler to prove
+ - Remember: const ref buys nothing, foo could modify!
+ - Need to actually construct object in location. How?
+   (ask audience, placement new)
+
+
+### Placement nah; don't do this
+
+```
+template <class T>
+T* safe_cast(char * b) {
+  auto f = new (b) T;
+  return f;
+}
+```
+
+Note:
+ - problem: even for a trivial type, no guarantee that placement new
+   does nothing, merely unspecified
+ - It could overwrite data, so we need to copy it out, and back in
+
+
+### Placement Better
+
+```
+template <class T>
+T* safe_cast(char * b) {
+    std::aligned_storage<sizeof(T), alignof(T)> s;
+    std::memcpy(&s, b, sizeof(T));
+    auto f = new (b) T;
+    std::memcpy(f, &s, sizeof(T));
+    return f;
+}
+```
+
+Note:
+ - Audience: does it optimize?
+
+
+### Placement Better (2)
+
+```
+FirstType* my_cast(char * b) {
+   return safe_cast<FirstType>(b);
+}
+```
+
+```
+my_cast(char*): # @my_cast(char*)
+  mov rax, rdi
+  ret
+```
+
+Note:
+ - New problem: const correctness
+ - Would need to const cast to use for our original use case
+ - A buffer wouldn't typically be const, but if you write
+   code like this, sooner or later someone will call it with
+   a const buffer in e.g. a unit test
+ - What to do? N months ago, would have said, just reinterpret
+ - Thought there was gentleman's agreement; but gcc optimized
+   nasty
+ - Please: p0593r2 Implicit creation of objects for low-level object
+   manipulation
+
+
+### Visit me
+
+```
+template <class Visitor>
+void foo(std::size_t i, const char * b, Visitor vis) {
+    switch (i) {
+        case 0: vis(*reinterpret_cast<FirstType*>(b));
+        case 1: vis(*reinterpret_cast<SecondType*>(b));
+        case 2: vis(*reinterpret_cast<ThirdType*>(b));
+    }
+}
+```
+
+Note:
+ - Part of original problem, runtime index, cast into type,
+   run visitor
+ - Writing it this way, tricky, not generic, no variadic switch
+   case
+ - Key observation: really calling a function in each case with
+   const char *, casting to T, and calling visitor. Same signature
+ - Which means, can represent action with function pointers
+
+
+### Making a function pointer table
+
+```
+template <class T, class V>
+constexpr auto make_func() {
+    return + [] (const char* b, V v) {
+        const auto& x = *reinterpret_cast<const T*>(b);
+        v(x);
+    };
+}
+template <class ... Ts, class V>
+void foo(std::size_t i, const char * b,  V v) {
+    static constexpr std::array<void(*)(const char*, V v),
+        sizeof...(Ts)> table = {make_func<Ts, V>()...};
+    table[i](b, v);
+}
+```
+
+Note:
+ - Great, this is generic. But what about the code?
+ - Turns out, the code produced is not ideal
+ - Remember: compilers don't like inlining function
+   pointers, in general
+ - Why are we even talking about this?
+ - Because, this is how visit is implemented
+
+
+### A very lazy visitor
+
+```
+struct visitor {
+    void operator()(int) {}
+    void operator()(double) {}
+};
+
+void foo(std::variant<int, double>& x) {
+    std::visit(visitor{}, x);
+}
+```
+
+Note:
+ - What do you think is produced for foo?
+ - It's not everything you'd hope for
+
+
+### The zero cost abstraction that couldn't
+
+```
+foo(std::variant<int, double>&):
+  sub rsp, 24
+  movzx eax, BYTE PTR [rdi+8]
+  cmp al, -1
+  je .L23
+  mov rsi, rdi
+  lea rdi, [rsp+15]
+  call [QWORD PTR std::__detail::__variant::__gen_vtable<
+      void, visitor&&, std::variant<int, double>&>::_S_vtable[0+rax*8]]
+  add rsp, 24
+  ret
+```
+
+Note:
+ - Plus, dozens of lines of code related to exceptions that
+   cannot be thrown
+
+
+### Can we visit better?
+
+```
+template <class Vis, class Var>
+void my_visit(Vis v, Var& x) {
+    const auto i = x.index();
+    switch (i) {
+        case 0: v(*std::get_if<0>(&x));
+        case 1: v(*std::get_if<1>(&x));
+    }
+}
+```
+
+Note:
+ - Optimizes to precisely ret with our lazy visitor
+ - If compiler isn't inlining empty functions, it essentially
+   means that the compiler cannot inline them. This is bad!
+ - Advice: do not use visit for single visitation in perf
+   critical. Write your own visit, one variant, up to
+   10 types, 95% (or more!) of use cases
+ - Conclusion: no language technique optimizes as well
+   as switch case, currently
+ - But switch case has not been upgraded to write the
+   kind of generic code we need
+ - Former more likely, but even newest compilers don't do it;
+   most people aren't running newest compilers, so this optimization
+   is almost certainly years away for the median C++ dev
+ - Shrug
+
+
+
+### Conclusion
+
+- Don't generalize, about the compiler being smart, or dumb
+- Instead, understand the kind of things that the compiler knows,
+  and doesn't knows
+- Assume the compiler knows what it's doing if it has the necessary
+  information, but it has blind spots too!
+- Understand where you can easily add value to the compiler
+- And when you should!
+
+
+
+### Appendix
 
 
 ### Generic pass by ref/value (1)
@@ -807,63 +1136,3 @@ void foo(T t) { foo_impl(t); }
 
 Note:
 - the compiler works for you! Not the other way around!
-
-
-### Sort saga, concluded (1)
-
-```
-bool my_comp(double x, double y) { return x > y; }
-
-std::sort(v.begin(), v.end(), my_comp);
-```
-
-Note:
-- This doesn't produce as good assembly, consistently?
-- Why not? Comes back to basic blocks that the compiler
-  sees "by default"
-- Recall: we fixed this issue by writing a lambda that
-  calls the function
-- the lambda is a unique type, unique instance of sort
-  template, lambda gets my_comp inlined
-- Can we automate this? Yes, but it only looks nice
-  in 17
-
-
-### Sort saga, concluded (2)
-
-```
-template <auto F> // 17 only syntax
-struct function_object {
-  template <class ... Ts>
-  auto operator()(Ts&& ... ts) {
-    return f(std::forward<Ts>(ts)...);
-  }
-};
-```
-
-
-### Sort saga, concluded (3)
-
-```
-std::sort(v.begin(), v.end(), function_object<my_comp>{});
-```
-
-Note:
-- basis for proposal, monostate_function
-- Monostate function:
-  http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2016/p0477r0.pdf
-- fun exercise: write C++14 version (will require a macro at the very end)
-
-
-
-### Conclusion
-
-- Don't generalize, about the compiler being smart, or dumb
-- Instead, understand the compiler is amazing at some things,
-  limited at others
-- Understand where you can easily add value to the compiler
-- And when you should!
-
-Note:
-- chess computers > chess humans
-- But, "computer aided" chess is the highest level of all!
