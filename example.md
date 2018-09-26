@@ -262,6 +262,27 @@ Note:
   too expensive
 
 
+### Human Prioritization
+
+```
+int fast_modulus(int x, int m) {
+  if (x < m) return x;
+  return x % m;
+}
+```
+
+Note:
+- Subject of an amazing Chandler Carruth talk from a couple years back
+- This benchmarks "better", over wide range of input data
+- Suggestion from talk: clang should just spit out the branch, even for x%m (it
+  still doesn't)
+- Better is typically average, but what about worst case?
+- There's value in translating code to assembly more "similar" to original code
+  (clang will "honor" your branch choice either way), and compilers often do
+  this when it's not clear if optimization is worthwhile (it's also just easier)
+- Worst case one example, another is only caring about one branch
+
+
 ### Summary of ways to think about Compiler
  - Constrained to produce correct code
  - Must always consider basic blocks: code in each basic
@@ -338,8 +359,8 @@ Note:
 - Will compiler inline? Yes, if ~T is short; definitely if it's
   empty, as it is for any trivially destructible
 - inlining empty function, means loop body is empty, loop removed
-- Note: no special optimization effort. Different situations from
-  memcpy optimizations for trivially copyable
+- NB: depends on knowing that != and ++ don't have side effects
+- Note: no special optimization effort.
 
 
 ### Const propagation
