@@ -683,8 +683,14 @@ void qux(const vector<double>& x, bool b) {
 ```
 Note:
 - What if we are certain we want the boolean pulled out of the loop?
+- Note: I don't claim pulling out the boolean is always better, but it may
+  be, need to measure
+- Ask audience: case where I'm almost certain I want boolean pulled out without
+  measuring
 - May not care about code size, and icache near non issue if only one branch
-  ever executed in a particular process lifecycle
+  ever executed in a particular process lifecycle, e.g. bool from config
+- I'm still not *100%* sure, but sure enough to default to it if I cared
+  about loop perf
 
 
 ### With bool (3)
