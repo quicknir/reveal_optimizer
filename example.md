@@ -871,7 +871,7 @@ Note:
 ### Yes and No
 
 ```
-from_buffer(char*):t sa
+from_buffer(char*):
         mov     eax, DWORD PTR [rdi]
         test    eax, eax
         je      .L8
@@ -881,7 +881,7 @@ from_buffer(char*):t sa
         movdqu  xmm0, XMMWORD PTR [rdi+4]
         mov     rdi, rsp
         movaps  XMMWORD PTR [rsp], xmm0
-        call    foo(FirstType&)
+        call    foo(FirstType const&)
         add     rsp, 24
         ret
 ```
